@@ -79,3 +79,13 @@ test('an overwrite with no patch removes the earlier lines it drops', () => {
   assert.equal(summary.linesWritten, 3);
   assert.equal(summary.linesUnprompted, 1);
 });
+
+test('plugin and marketplace manifests agree, and the plugin version follows commits', async () => {
+  const { readFileSync } = await import('node:fs');
+  const read = (path) => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'));
+  const plugin = read('.claude-plugin/plugin.json');
+  const marketplace = read('.claude-plugin/marketplace.json');
+  assert.equal(marketplace.plugins[0].name, plugin.name);
+  assert.equal(plugin.version, undefined);
+  assert.equal(marketplace.plugins[0].version, undefined);
+});

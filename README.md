@@ -90,6 +90,20 @@ Mention them with `@`, or ask for them by name:
 
 If you also run oh-my-claudecode, these agents do not replace its `ai-slop-cleaner` skill and do not collide with it: OMC blocks the `ai-slop-cleaner` subagent type, and these use different names. Avoid the words "deslop" and "anti-slop" in a prompt that should reach these agents, since OMC's keyword hook routes those to its own skill.
 
+## Releasing
+
+Merging to `main` is the release:
+
+- **Plugin:** `plugin.json` has no `version`, so Claude Code uses the commit SHA and every commit on `main` is a new plugin version. Users get it with `/plugin update`, or automatically if they turn on auto-update for this marketplace in `/plugin` > Marketplaces. `claude plugin validate` warns about the missing version; that is intended.
+- **npm:** `.github/workflows/release.yml` runs on each push to `main` that changes shipped files. It runs the tests, publishes the next version to npm with provenance, tags `vX.Y.Z`, and creates a GitHub release with generated notes. It commits nothing back to `main`; the version in `package.json` is only the starting point for the first publish.
+
+The bump level comes from commit subjects since the last tag: `feat:` is minor, `type!:` or `BREAKING CHANGE` is major, anything else is patch. To force a level, run the workflow by hand from the Actions tab.
+
+One-time npm setup, either:
+
+1. **Trusted publishing (recommended, no secret):** publish the first version by hand (`npm login && npm publish`), then on npmjs.com open the package's Settings > Trusted publishing and add GitHub Actions with owner `tttmaximttt`, repository `slop-analyser`, workflow `release.yml`.
+2. **Token:** create a granular npm access token with publish rights and add it as the repository secret `NPM_TOKEN`.
+
 ## Development
 
 ```sh
