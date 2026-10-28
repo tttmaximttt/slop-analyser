@@ -34,10 +34,19 @@ That gives you:
 
 Requires Node 20.10 or later. No dependencies.
 
-To run the report outside Claude Code too, for example in a terminal or CI, without touching the session:
+### Or with npm
 
 ```sh
-npx github:tttmaximttt/slop-analyser --latest
+npm install -g slop-analyser
+slop-analyser setup
+```
+
+`setup` registers the installed package with Claude Code as a plugin marketplace and installs the plugin from it. To update, run `npm update -g slop-analyser` and then `slop-analyser setup` again; `/slop-analyser:update` only rereads the installed copy. `slop-analyser remove` undoes it. Nothing runs on `npm install` itself, so `--ignore-scripts` makes no difference.
+
+The npm install also puts `slop-report` on your PATH, so you can run the report in a terminal or CI without Claude Code. Without installing anything:
+
+```sh
+npx -p slop-analyser slop-report --latest
 ```
 
 ## slop-report
@@ -83,6 +92,18 @@ Mention them with `@`, or ask for them by name:
 `slop-cleaner` runs `slop-report` first to pick files and smells, locks behaviour with the narrowest tests, then cleans one bucket at a time (dead code, duplication, needless abstraction and boundary fixes, noise, tests), rerunning the lock after each. It ends with four sections: changed files, simplifications, behaviour lock and verification, remaining risks.
 
 If you also run oh-my-claudecode, these agents do not replace its `ai-slop-cleaner` skill and do not collide with it: OMC blocks the `ai-slop-cleaner` subagent type, and these use different names. Avoid the words "deslop" and "anti-slop" in a prompt that should reach these agents, since OMC's keyword hook routes those to its own skill.
+
+## Releasing
+
+Versions are explicit: bump `version` in both `package.json` and `.claude-plugin/plugin.json` (the tests check they match), then merge to `main`.
+
+- **Plugin:** Claude Code sees the new version in `plugin.json`, and users get it with `/slop-analyser:update` or `/plugin update`. A commit that does not bump the version is not offered as an update.
+- **npm:** `.github/workflows/release.yml` runs on each push to `main` that changes shipped files. When `package.json`'s version is not on npm yet, it runs the tests, publishes that version with provenance, tags `vX.Y.Z`, and creates a GitHub release with generated notes. When the version is already published, it does nothing. It commits nothing back to `main`.
+
+One-time npm setup, either:
+
+1. **Trusted publishing (recommended, no secret):** publish the first version by hand (`npm login && npm publish`), then on npmjs.com open the package's Settings > Trusted publishing and add GitHub Actions with owner `tttmaximttt`, repository `slop-analyser`, workflow `release.yml`.
+2. **Token:** create a granular npm access token with publish rights and add it as the repository secret `NPM_TOKEN`.
 
 ## Development
 
