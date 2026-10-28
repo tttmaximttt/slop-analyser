@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { analyse, readTranscript } from '../src/analyse.mjs';
+import { analyse, mergeByTime, readTranscript } from '../src/analyse.mjs';
 import { loadPricing } from '../src/cost.mjs';
 import { formatReport } from '../src/format.mjs';
 
@@ -14,6 +14,7 @@ Runs locally; it makes no API calls.
 
 Options:
   --latest            Use the newest session of the project in --project (default: cwd)
+  --session <id>      Use this session of the project in --project
   --project <dir>     Project directory whose sessions to look up
   --no-subagents      Ignore <session>/subagents/*.jsonl next to each transcript
   --json              Print the full report as JSON
@@ -25,6 +26,7 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     latest: { type: 'boolean' },
+    session: { type: 'string' },
     project: { type: 'string' },
     'no-subagents': { type: 'boolean' },
     json: { type: 'boolean' },
@@ -34,7 +36,7 @@ const { values, positionals } = parseArgs({
   },
 });
 
-if (values.help || (!values.latest && positionals.length === 0)) {
+if (values.help || (!values.latest && !values.session && positionals.length === 0)) {
   console.log(USAGE);
   process.exit(values.help ? 0 : 1);
 }
@@ -44,9 +46,14 @@ function fail(message) {
   process.exit(1);
 }
 
-// Claude Code names a project's folder after its path with every non-alphanumeric character as '-'.
-function latestTranscript(projectDir) {
-  const dir = join(homedir(), '.claude', 'projects', projectDir.replace(/[^a-zA-Z0-9]/g, '-'));
+const top = Number(values.top ?? 10);
+if (!Number.isInteger(top) || top < 1) fail(`--top must be a positive whole number, got ${values.top}`);
+
+// Claude Code names a project's folder after its absolute path with every non-alphanumeric character as '-'.
+const projectDir = () => join(homedir(), '.claude', 'projects', resolve(values.project ?? process.cwd()).replace(/[^a-zA-Z0-9]/g, '-'));
+
+function latestTranscript() {
+  const dir = projectDir();
   if (!existsSync(dir)) fail(`no sessions found in ${dir}`);
   const newest = readdirSync(dir)
     .filter((name) => name.endsWith('.jsonl'))
@@ -62,16 +69,11 @@ function withSubagents(path) {
   return [path, ...readdirSync(dir).filter((name) => name.endsWith('.jsonl')).map((name) => join(dir, name))];
 }
 
-const roots = values.latest ? [latestTranscript(values.project ?? process.cwd())] : positionals;
+const roots = values.session ? [join(projectDir(), `${values.session}.jsonl`)] : values.latest ? [latestTranscript()] : positionals;
 for (const path of roots) if (!existsSync(path)) fail(`not found: ${path}`);
 
-const entries = roots
-  .flatMap(withSubagents)
-  .flatMap(readTranscript)
-  .map((entry, order) => ({ entry, order, time: Date.parse(entry.timestamp ?? '') || 0 }))
-  .sort((a, b) => a.time - b.time || a.order - b.order)
-  .map(({ entry }) => entry);
+const entries = mergeByTime(roots.flatMap(withSubagents).map(readTranscript));
 
 const report = analyse(entries, loadPricing(values.pricing));
 if (values.json) console.log(JSON.stringify({ transcripts: roots, ...report }, null, 2));
-else console.log(`${roots.join('\n')}\n\n${formatReport(report, { top: Number(values.top ?? 10) })}`);
+else console.log(`${roots.join('\n')}\n\n${formatReport(report, { top })}`);

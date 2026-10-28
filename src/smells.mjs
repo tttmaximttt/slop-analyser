@@ -20,7 +20,8 @@ const RULES = [
 const WINDOW = 4;
 
 export function findSmells(lines) {
-  const surviving = lines.filter((line) => !line.removedBy && CODE.has(extname(line.file)));
+  const code = lines.filter((line) => CODE.has(extname(line.file)));
+  const surviving = code.filter((line) => !line.removedBy);
   const hits = new Map(RULES.map((rule) => [rule.id, { id: rule.id, label: rule.label, count: 0, examples: [] }]));
   for (const line of surviving) {
     const ext = extname(line.file);
@@ -31,31 +32,57 @@ export function findSmells(lines) {
       if (hit.examples.length < 3) hit.examples.push(`${line.file}: ${line.text.trim()}`);
     }
   }
-  const duplicates = findDuplicateBlocks(surviving);
+  const duplicates = findDuplicateBlocks(code);
   return [...hits.values(), duplicates].filter((hit) => hit.count > 0);
 }
 
-// A block counts as duplicated when the same WINDOW consecutive lines, from one write, appear in another write.
-function findDuplicateBlocks(surviving) {
-  const runs = new Map();
-  for (const line of surviving) {
-    const key = `${line.file}\0${line.writtenBy}`;
-    if (!runs.has(key)) runs.set(key, []);
-    runs.get(key).push(line);
+// Splits the lines into runs that sit next to each other in the file: one segment of one write, cut wherever
+// a line was later removed.
+function contiguousRuns(lines) {
+  const runs = [];
+  const open = new Map();
+  for (const line of lines) {
+    if (line.removedBy) {
+      open.delete(line.segment);
+      continue;
+    }
+    if (!open.has(line.segment)) {
+      const run = [];
+      runs.push(run);
+      open.set(line.segment, run);
+    }
+    open.get(line.segment).push(line);
   }
+  return runs;
+}
+
+// A block counts as duplicated when the same WINDOW consecutive lines from one run appear in another run.
+// Overlapping duplicated windows form one block, counted once however many copies it has.
+function findDuplicateBlocks(lines) {
+  const runs = contiguousRuns(lines).map((run) => ({
+    file: run[0].file,
+    windows: Array.from({ length: Math.max(0, run.length - WINDOW + 1) }, (_, i) =>
+      run.slice(i, i + WINDOW).map((line) => line.text.trim()).join('\n'),
+    ),
+  }));
   const seen = new Map();
-  for (const [runKey, run] of runs) {
-    for (let i = 0; i + WINDOW <= run.length; i++) {
-      const block = run.slice(i, i + WINDOW).map((line) => line.text.trim()).join('\n');
+  runs.forEach(({ file, windows }, r) => {
+    for (const block of windows) {
       if (!seen.has(block)) seen.set(block, new Map());
-      seen.get(block).set(runKey, run[i].file);
+      seen.get(block).set(r, file);
+    }
+  });
+  const blocks = new Map();
+  for (const { windows } of runs) {
+    let inBlock = false;
+    for (const block of windows) {
+      const where = seen.get(block);
+      const duplicated = where.size > 1;
+      if (duplicated && !inBlock && !blocks.has(block)) blocks.set(block, where);
+      inBlock = duplicated;
     }
   }
-  const hit = { id: 'duplicate', label: `duplicated ${WINDOW}-line block`, count: 0, examples: [] };
-  for (const [block, where] of seen) {
-    if (where.size < 2) continue;
-    hit.count++;
-    if (hit.examples.length < 3) hit.examples.push(`${[...new Set(where.values())].join(', ')}: ${block.split('\n')[0]}`);
-  }
+  const hit = { id: 'duplicate', label: `duplicated ${WINDOW}-line block`, count: blocks.size, examples: [] };
+  for (const [block, where] of [...blocks].slice(0, 3)) hit.examples.push(`${[...new Set(where.values())].join(', ')}: ${block.split('\n')[0]}`);
   return hit;
 }
