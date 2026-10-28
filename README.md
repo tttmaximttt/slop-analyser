@@ -1,5 +1,7 @@
 # slop-analyser
 
+[![npm](https://img.shields.io/npm/v/slop-analyser)](https://www.npmjs.com/package/slop-analyser)
+
 Measures how much of a Claude Code session's spend went into code that was later thrown away, and gives you two agents to clean up what survived.
 
 - `slop-report` reads a session transcript (`~/.claude/projects/<project>/<session>.jsonl`) and reports cost, lines written, lines rewritten, and static smells in what remains. It runs locally and makes no API calls, so it costs no tokens.
@@ -35,6 +37,8 @@ That gives you:
 Requires Node 20.10 or later. No dependencies.
 
 ### Or with npm
+
+The package is [slop-analyser on npm](https://www.npmjs.com/package/slop-analyser).
 
 ```sh
 npm install -g slop-analyser
