@@ -4,6 +4,8 @@
 
 Measures how much of a Claude Code session's spend went into code that was later thrown away, and gives you two agents to clean up what survived.
 
+![The slop-analyser status line: slop 4.7% · 3 lines thrown away, $0.01 of $6.89 · 14 smells left](https://raw.githubusercontent.com/tttmaximttt/slop-analyser/main/docs/status-line.png)
+
 - `slop-report` reads a session transcript (`~/.claude/projects/<project>/<session>.jsonl`) and reports cost, lines written, lines rewritten, and static smells in what remains. It runs locally and makes no API calls, so it costs no tokens.
 - `slop-cleaner` is a Claude Code subagent based on the oh-my-claudecode `ai-slop-cleaner` workflow: measure, lock behaviour, plan, one smell per pass, gates, fixed report.
 - `slop-reviewer` is a read-only subagent that reviews a cleaner pass and returns a verdict, keeping writer and reviewer separate.
