@@ -52,7 +52,7 @@ jobs:
 
       # Trusted publishing needs npm 11.5.1 or later.
       - if: steps.version.outputs.publish == 'true'
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
 
       - if: steps.version.outputs.publish == 'true'
         run: npm test
