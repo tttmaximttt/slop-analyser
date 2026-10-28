@@ -141,6 +141,7 @@ function summarise(messages, turns, ledger, pricing) {
   const sum = (key) => rows.reduce((total, row) => total + row[key], 0);
   const totalCost = sum('cost');
   const written = sum('written');
+  const rework = sum('rework');
   const unprompted = sum('unprompted');
   const wastedCost = sum('wastedCost');
   return {
@@ -150,8 +151,8 @@ function summarise(messages, turns, ledger, pricing) {
       messages: messages.size,
       turns: turns.length - 1,
       linesWritten: written,
-      linesSurviving: written - unprompted - sum('rework'),
-      linesRework: sum('rework'),
+      linesSurviving: written - unprompted - rework,
+      linesRework: rework,
       linesUnprompted: unprompted,
       reworkCost: sum('reworkCost'),
       wastedCost,
