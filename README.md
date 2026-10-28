@@ -32,10 +32,19 @@ That gives you:
 
 Requires Node 20 or later. No dependencies.
 
-To run the report outside Claude Code too, for example in a terminal or CI, without touching the session:
+### Or with npm
 
 ```sh
-npx github:tttmaximttt/slop-analyser --latest
+npm install -g slop-analyser
+slop-analyser setup
+```
+
+`setup` registers the installed package with Claude Code as a plugin marketplace and installs the plugin from it. Rerun it after `npm update -g slop-analyser`. `slop-analyser remove` undoes it. Nothing runs on `npm install` itself, so `--ignore-scripts` makes no difference.
+
+The npm install also puts `slop-report` on your PATH, so you can run the report in a terminal or CI without Claude Code. Without installing anything:
+
+```sh
+npx -p slop-analyser slop-report --latest
 ```
 
 ## slop-report
