@@ -18,7 +18,8 @@ function ratesFor(model, pricing) {
 export function messageCost(model, usage, pricing) {
   if (model === '<synthetic>') return 0;
   const rates = ratesFor(model, pricing);
-  if (!rates || !usage) return null;
+  if (!rates) return null;
+  if (!usage) return 0;
   const { cacheWriteMultiplier: mult } = pricing;
   const split = usage.cache_creation;
   const write5m = split ? split.ephemeral_5m_input_tokens ?? 0 : usage.cache_creation_input_tokens ?? 0;
