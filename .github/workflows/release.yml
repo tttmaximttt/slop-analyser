@@ -1,8 +1,8 @@
 name: Release
 
-# Every push to main that changes shipped files publishes a new npm version and a GitHub release.
-# Plugin users need nothing from this job: plugin.json has no version, so Claude Code treats each
-# commit on main as a new plugin version.
+# Every push to main that changes shipped files publishes package.json's version to npm and creates a
+# GitHub release, unless that version is already on npm. Versions are bumped by hand in package.json and
+# .claude-plugin/plugin.json; the tests check that they match.
 
 on:
   push:
@@ -12,16 +12,11 @@ on:
       - 'src/**'
       - 'agents/**'
       - 'skills/**'
+      - 'hooks/**'
       - '.claude-plugin/**'
       - 'pricing.json'
       - 'package.json'
   workflow_dispatch:
-    inputs:
-      level:
-        description: Version bump
-        type: choice
-        options: [auto, patch, minor, major]
-        default: auto
 
 concurrency:
   group: release
@@ -36,39 +31,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm 11.5.1 or later.
-      - run: npm install -g npm@latest
-
-      - run: npm test
-
-      - name: Work out the version
+      - name: Check whether this version is already published
         id: version
-        env:
-          LEVEL: ${{ inputs.level || 'auto' }}
         run: |
-          published=$(npm view "$(node -p 'require("./package.json").name')" version 2>/dev/null || true)
-          next=$(node scripts/next-version.mjs "$published" "$LEVEL")
-          echo "Published: ${published:-none}, releasing: $next"
-          echo "version=$next" >> "$GITHUB_OUTPUT"
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already on npm; nothing to release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - run: npm version "$VERSION" --no-git-tag-version --allow-same-version
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+      # Trusted publishing needs npm 11.5.1 or later.
+      - if: steps.version.outputs.publish == 'true'
+        run: npm install -g npm@latest
+
+      - if: steps.version.outputs.publish == 'true'
+        run: npm test
 
       # Uses npm trusted publishing when it is set up for this repo; otherwise the NPM_TOKEN secret.
-      - run: npm publish --provenance --access public
+      - if: steps.version.outputs.publish == 'true'
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Tag and create the GitHub release
+        if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}

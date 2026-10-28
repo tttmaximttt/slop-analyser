@@ -1,17 +1,18 @@
 {
   "name": "slop-analyser",
-  "version": "0.1.0",
-  "description": "Measure wasted spend and code churn in Claude Code sessions, and clean it up with a bounded agent",
+  "version": "0.3.4",
+  "description": "Measure wasted spend and code churn in Claude Code session transcripts, and clean it up with a bounded agent",
   "type": "module",
   "bin": {
-    "slop-report": "bin/slop-report.mjs",
-    "slop-analyser": "bin/slop-analyser.mjs"
+    "slop-report": "bin/slop-report",
+    "slop-analyser": "bin/slop-analyser"
   },
   "files": [
     ".claude-plugin/",
     "agents/",
-    "skills/",
     "bin/",
+    "hooks/",
+    "skills/",
     "src/",
     "pricing.json"
   ],
@@ -25,7 +26,7 @@
   },
   "author": "Maksym Radko",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.10"
   },
   "license": "MIT"
 }
