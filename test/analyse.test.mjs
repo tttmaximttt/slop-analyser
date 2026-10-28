@@ -116,6 +116,7 @@ test('a write from a message with no id or usage is counted at no cost', () => {
   const { summary } = analyse([prompt('go'), write, result('t1')], pricing);
   assert.equal(summary.linesWritten, 1);
   assert.equal(summary.codeCost, 0);
+  assert.deepEqual(summary.unpricedModels, []);
 });
 
 test('an overwrite with no patch removes the earlier lines it drops', () => {
