@@ -1,19 +1,20 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-// Claude Code names a project's folder after its start directory with every non-alphanumeric character as '-'.
-const transcriptDir = (home: string, cwd: string) => `${home}/.claude/projects/${cwd.replace(/[^a-zA-Z0-9]/g, '-')}`
-
 const usd = (n: number) => `$${n.toFixed(2)}`
 
 const idle = (cost: number) => `slop — · ${usd(cost)} spent, no code written yet`
 
+const unavailable = 'slop — · report unavailable, see the debug log'
+
 // Draws the session's status line entry; false when the transcript could not be read.
 async function refresh($: EngineInterface, startCwd: string | undefined) {
-  const home = await $.env.get('HOME')
   const cwd = startCwd ?? (await $.session.cwd())
-  const path = `${transcriptDir(home ?? '', cwd)}/${await $.session.id()}.jsonl`
-  const { exitCode, stdout } = await $.process.run(['node', `${$.plugin.root}/bin/slop-report`, path, '--json'], { timeoutMs: 10_000 })
-  if (exitCode !== 0) return false
+  const args = ['--session', await $.session.id(), '--project', cwd, '--json']
+  const { exitCode, stdout } = await $.process.run(['node', `${$.plugin.root}/bin/slop-report`, ...args], { timeoutMs: 10_000 })
+  if (exitCode !== 0) {
+    $.ui.log(`${$.plugin.name}: slop-report exited with ${exitCode}`, { to: 'debug' })
+    return false
+  }
   const { summary: s, smells } = JSON.parse(stdout)
   const left = smells.reduce((total: number, smell: { count: number }) => total + smell.count, 0)
   $.ui.status(
@@ -26,6 +27,8 @@ async function refresh($: EngineInterface, startCwd: string | undefined) {
 
 export const register: Register = on => {
   let startCwd: string | undefined
+  // Each refresh re-reads the whole session, so a turn that ends while one is still running skips its own.
+  let running = false
 
   on('session.start', async ($, e, next) => {
     startCwd = e.cwd
@@ -41,11 +44,16 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (e.agentId) return done
+    if (e.agentId || running) return done
+    running = true
     try {
-      await refresh($, startCwd)
+      // The transcript exists by now, so a failure (including a timeout on a long session) is shown, not hidden.
+      if (!(await refresh($, startCwd))) $.ui.status(unavailable)
     } catch (err) {
       $.ui.log(`${$.plugin.name}: ${String(err)}`, { to: 'debug' })
+      $.ui.status(unavailable)
+    } finally {
+      running = false
     }
     return done
   })
