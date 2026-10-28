@@ -26,11 +26,13 @@ That gives you:
 | Component | Use |
 | --- | --- |
 | `/slop-analyser:slop-report` | Prints the report for the current session |
+| `/slop-analyser:update` | Updates the plugin to the latest version; restart Claude Code to apply it |
 | `slop-analyser:slop-cleaner` agent | Cleans up the session's code |
 | `slop-analyser:slop-reviewer` agent | Reviews a cleanup without editing |
 | `slop-report` command | On the Bash tool's PATH while the plugin is enabled |
+| Status line entry | At session start and after each turn, `slop 3.2% · 12 lines thrown away, $0.41 of $2.10 · 5 smells left` for the current session: what was rewritten with no failure, and the smells still in the lines that survived (`slop — · $0.78 spent, no code written yet` until it writes code) |
 
-Requires Node 20 or later. No dependencies.
+Requires Node 20.10 or later. No dependencies.
 
 ### Or with npm
 
@@ -39,7 +41,7 @@ npm install -g slop-analyser
 slop-analyser setup
 ```
 
-`setup` registers the installed package with Claude Code as a plugin marketplace and installs the plugin from it. Rerun it after `npm update -g slop-analyser`. `slop-analyser remove` undoes it. Nothing runs on `npm install` itself, so `--ignore-scripts` makes no difference.
+`setup` registers the installed package with Claude Code as a plugin marketplace and installs the plugin from it. To update, run `npm update -g slop-analyser` and then `slop-analyser setup` again; `/slop-analyser:update` only rereads the installed copy. `slop-analyser remove` undoes it. Nothing runs on `npm install` itself, so `--ignore-scripts` makes no difference.
 
 The npm install also puts `slop-report` on your PATH, so you can run the report in a terminal or CI without Claude Code. Without installing anything:
 
@@ -52,6 +54,7 @@ npx -p slop-analyser slop-report --latest
 ```sh
 slop-report --latest                      # newest session for the current directory
 slop-report --latest --project ~/code/api # newest session for another project
+slop-report --session <id>                # a specific session for the current directory
 slop-report path/to/session.jsonl --json  # full report as JSON
 ```
 
@@ -92,12 +95,10 @@ If you also run oh-my-claudecode, these agents do not replace its `ai-slop-clean
 
 ## Releasing
 
-Merging to `main` is the release:
+Versions are explicit: bump `version` in both `package.json` and `.claude-plugin/plugin.json` (the tests check they match), then merge to `main`.
 
-- **Plugin:** `plugin.json` has no `version`, so Claude Code uses the commit SHA and every commit on `main` is a new plugin version. Users get it with `/plugin update`, or automatically if they turn on auto-update for this marketplace in `/plugin` > Marketplaces. `claude plugin validate` warns about the missing version; that is intended.
-- **npm:** `.github/workflows/release.yml` runs on each push to `main` that changes shipped files. It runs the tests, publishes the next version to npm with provenance, tags `vX.Y.Z`, and creates a GitHub release with generated notes. It commits nothing back to `main`; the version in `package.json` is only the starting point for the first publish.
-
-The bump level comes from commit subjects since the last tag: `feat:` is minor, `type!:` or `BREAKING CHANGE` is major, anything else is patch. To force a level, run the workflow by hand from the Actions tab.
+- **Plugin:** Claude Code sees the new version in `plugin.json`, and users get it with `/slop-analyser:update` or `/plugin update`. A commit that does not bump the version is not offered as an update.
+- **npm:** `.github/workflows/release.yml` runs on each push to `main` that changes shipped files. When `package.json`'s version is not on npm yet, it runs the tests, publishes that version with provenance, tags `vX.Y.Z`, and creates a GitHub release with generated notes. When the version is already published, it does nothing. It commits nothing back to `main`.
 
 One-time npm setup, either:
 

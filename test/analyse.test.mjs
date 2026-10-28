@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { analyse } from '../src/analyse.mjs';
+import { analyse, mergeByTime } from '../src/analyse.mjs';
 import { loadPricing, messageCost } from '../src/cost.mjs';
 
 const pricing = loadPricing();
@@ -11,9 +11,9 @@ const call = (msgId, toolId, name, input) => ({
   type: 'assistant',
   message: { id: msgId, model: 'claude-sonnet-5-5', usage, content: [{ type: 'tool_use', id: toolId, name, input }] },
 });
-const result = (toolId, extra = {}, isError = false) => ({
+const result = (toolId, extra = {}, isError = false, content = isError ? 'Exit code 1' : 'ok') => ({
   type: 'user',
-  message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolId, content: isError ? 'Exit code 1' : 'ok', is_error: isError }] },
+  message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolId, content, is_error: isError }] },
   ...extra,
 });
 
@@ -30,6 +30,13 @@ test('prices every usage bucket, including 1h cache writes and dated model ids',
   );
   assert.equal(cost.toFixed(4), (3 + 0.3 + 15 + 3 * 1.25 + 3 * 2).toFixed(4));
   assert.equal(messageCost('claude-unknown', usage, pricing), null);
+});
+
+test('prices Bedrock and Vertex ids, and leaves an unknown minor version unpriced', () => {
+  for (const model of ['us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'claude-sonnet-4-5@20250929', 'claude-opus-5-5[1m]']) {
+    assert.notEqual(messageCost(model, usage, pricing), null, model);
+  }
+  for (const model of ['claude-opus-5-1', 'claude-opus-55']) assert.equal(messageCost(model, usage, pricing), null, model);
 });
 
 test('splits churn into rework after a failure and unprompted rewrites', () => {
@@ -66,6 +73,61 @@ test('counts usage once when one response is split across lines', () => {
   assert.equal(summary.totalCost, 10);
 });
 
+test('diffs MultiEdit inputs and flags a block repeated across writes', () => {
+  const block = 'const x = load();\nconst y = parse(x);\nconst z = check(y);\nreturn save(z);';
+  const entries = [
+    prompt('copy it'),
+    call('m1', 't1', 'Write', { file_path: '/repo/a.js', content: block }),
+    result('t1'),
+    call('m2', 't2', 'MultiEdit', {
+      file_path: '/repo/b.js',
+      edits: [
+        { old_string: 'old();', new_string: block },
+        { old_string: 'keep();', new_string: 'keep();\nextra();' },
+      ],
+    }),
+    result('t2'),
+  ];
+  const { summary, smells } = analyse(entries, pricing);
+  assert.equal(summary.linesWritten, 9);
+  assert.deepEqual(
+    smells.find((s) => s.id === 'duplicate'),
+    { id: 'duplicate', label: 'duplicated 4-line block', count: 1, examples: ['/repo/a.js, /repo/b.js: const x = load();'] },
+  );
+});
+
+const rewriteAfter = (toolName, output, isError = false) =>
+  analyse(
+    [
+      prompt('fix it'),
+      call('m1', 't1', 'Write', { file_path: '/repo/e.js', content: 'let e = 1;' }),
+      result('t1'),
+      call('m2', 't2', toolName, { command: 'run' }),
+      result('t2', {}, isError, output),
+      call('m3', 't3', 'Edit', { file_path: '/repo/e.js', old_string: 'let e = 1;', new_string: 'let e = 2;' }),
+      result('t3'),
+    ],
+    pricing,
+  ).summary;
+
+test('a piped node:test summary with failures counts as a failure, one with none does not', () => {
+  for (const output of ['# pass 1\n# fail 1', 'ℹ pass 3\nℹ fail 2', '# pass 0\n# fail 10']) {
+    assert.equal(rewriteAfter('Bash', output).linesRework, 1, output);
+  }
+  for (const output of ['# pass 2\n# fail 0', '# fail 3 times then retry']) {
+    assert.equal(rewriteAfter('Bash', output).linesUnprompted, 1, output);
+  }
+});
+
+test('a write from a message with no id or usage is counted at no cost', () => {
+  const write = call(undefined, 't1', 'Write', { file_path: '/repo/d.js', content: 'let d = 1;' });
+  delete write.message.usage;
+  const { summary } = analyse([prompt('go'), write, result('t1')], pricing);
+  assert.equal(summary.linesWritten, 1);
+  assert.equal(summary.codeCost, 0);
+  assert.deepEqual(summary.unpricedModels, []);
+});
+
 test('an overwrite with no patch removes the earlier lines it drops', () => {
   const file = '/repo/b.py';
   const entries = [
@@ -80,12 +142,87 @@ test('an overwrite with no patch removes the earlier lines it drops', () => {
   assert.equal(summary.linesUnprompted, 1);
 });
 
-test('plugin and marketplace manifests agree, and the plugin version follows commits', async () => {
-  const { readFileSync } = await import('node:fs');
-  const read = (path) => JSON.parse(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'));
-  const plugin = read('.claude-plugin/plugin.json');
-  const marketplace = read('.claude-plugin/marketplace.json');
-  assert.equal(marketplace.plugins[0].name, plugin.name);
-  assert.equal(plugin.version, undefined);
-  assert.equal(marketplace.plugins[0].version, undefined);
+test('a passing run with a zero failure count, or grep output mentioning FAIL, is not a failure', () => {
+  for (const output of ['test result: ok. 5 passed; 0 failed', 'Tests: 0 failed, 3 passed', 'src/a.js:3:  if (s === "FAIL") {']) {
+    assert.equal(rewriteAfter('Bash', output).linesUnprompted, 1, output);
+  }
+  for (const output of ['Tests: 2 failed, 3 passed', 'FAIL src/a.test.js', '--- FAIL: TestA (0.00s)']) {
+    assert.equal(rewriteAfter('Bash', output).linesRework, 1, output);
+  }
+});
+
+test('a failed Edit or Read, or a rejected command, is not a failure', () => {
+  assert.equal(rewriteAfter('Read', 'File does not exist.', true).linesUnprompted, 1);
+  assert.equal(rewriteAfter('Edit', 'String to replace not found in file.', true).linesUnprompted, 1);
+  assert.equal(rewriteAfter('Bash', "The user doesn't want to proceed with this tool use.", true).linesUnprompted, 1);
+});
+
+test('a copied block counts once however long it is, and a window never spans separate hunks', () => {
+  const block = Array.from({ length: 10 }, (_, i) => `step${i}();`).join('\n');
+  const copied = analyse(
+    [
+      prompt('copy'),
+      call('m1', 't1', 'Write', { file_path: '/repo/a.js', content: block }),
+      result('t1'),
+      call('m2', 't2', 'Write', { file_path: '/repo/b.js', content: block }),
+      result('t2'),
+    ],
+    pricing,
+  );
+  assert.equal(copied.smells.find((s) => s.id === 'duplicate').count, 1);
+
+  const spread = analyse(
+    [
+      prompt('edit'),
+      call('m1', 't1', 'Write', { file_path: '/repo/c.js', content: 'one();\ntwo();\nthree();\nfour();' }),
+      result('t1'),
+      call('m2', 't2', 'MultiEdit', {
+        file_path: '/repo/d.js',
+        edits: [
+          { old_string: 'a();', new_string: 'one();\ntwo();' },
+          { old_string: 'b();', new_string: 'three();\nfour();' },
+        ],
+      }),
+      result('t2'),
+    ],
+    pricing,
+  );
+  assert.equal(spread.smells.find((s) => s.id === 'duplicate'), undefined);
+});
+
+test('a block copied within one write counts as duplicated, a single copy does not', () => {
+  const body = 'const p = parse(raw);\nconst v = p.filter(ok);\nconst s = v.sort(byTotal);\nreturn s.map(total);';
+  const smellsOf = (content) =>
+    analyse([prompt('write'), call('m1', 't1', 'Write', { file_path: '/repo/g.js', content }), result('t1')], pricing).smells;
+  const twice = smellsOf(`function a(raw) {\n${body}\n}\nfunction b(raw) {\n${body}\n}`);
+  assert.deepEqual(twice.find((s) => s.id === 'duplicate'), {
+    id: 'duplicate',
+    label: 'duplicated 4-line block',
+    count: 1,
+    examples: ['/repo/g.js: const p = parse(raw);'],
+  });
+  assert.equal(smellsOf(`function a(raw) {\n${body}\n}`).find((s) => s.id === 'duplicate'), undefined);
+});
+
+test('a replace_all Edit with no patch removes every tracked copy', () => {
+  const file = '/repo/f.js';
+  const { summary } = analyse(
+    [
+      prompt('rename'),
+      call('m1', 't1', 'Write', { file_path: file, content: 'oldCall(1);\nx();\noldCall(1);\ny();\noldCall(1);' }),
+      result('t1'),
+      call('m2', 't2', 'Edit', { file_path: file, old_string: 'oldCall(1);', new_string: 'newCall(1);', replace_all: true }),
+      result('t2'),
+    ],
+    pricing,
+  );
+  assert.equal(summary.linesUnprompted, 3);
+  assert.equal(summary.linesWritten, 8);
+});
+
+test('a line with no timestamp stays next to its neighbours when transcripts are merged', () => {
+  const at = (timestamp, id) => ({ id, ...(timestamp && { timestamp }) });
+  const main = [at('2026-01-01T00:00:01Z', 'p1'), at(null, 'a1'), at('2026-01-01T00:00:05Z', 'p2')];
+  const sub = [at(null, 's0'), at('2026-01-01T00:00:03Z', 's1')];
+  assert.deepEqual(mergeByTime([main, sub]).map((e) => e.id), ['p1', 'a1', 's0', 's1', 'p2']);
 });

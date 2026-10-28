@@ -1,10 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { messageCost } from './cost.mjs';
-import { Ledger, multisetDiff, patchLines } from './ledger.mjs';
+import { joinRuns, Ledger, multisetDiff, patchLines } from './ledger.mjs';
 import { findSmells } from './smells.mjs';
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write']);
-const FAILURE_TEXT = /\b\d+ (failing|failed)\b|\bFAIL\b|error TS\d+|Traceback \(most recent call last\)/;
+// The node:test summary lines catch failures whose exit code was lost in a pipe (`node --test | tail`).
+// FAIL only counts at the start of a line, where jest, vitest and go print it, so grep output that mentions it does not.
+const FAILURE_TEXT = /\b[1-9]\d* (failing|failed)\b|^\s*(--- )?FAIL\b|error TS\d+|Traceback \(most recent call last\)|^(# |ℹ )fail [1-9]\d*$/m;
+const REJECTED = /^The user doesn't want to proceed with this tool use/;
 
 export function readTranscript(path) {
   const entries = [];
@@ -20,6 +23,19 @@ export function readTranscript(path) {
 }
 
 const splitLines = (text) => (text ? text.split('\n') : []);
+
+// Merges several transcripts into one stream ordered by time. A line with no timestamp keeps the time of the
+// line before it in its own file (or the first timestamp after it), so it stays next to its neighbours.
+export function mergeByTime(transcripts) {
+  let order = 0;
+  const timed = transcripts.flatMap((entries) => {
+    const times = entries.map((entry) => Date.parse(entry.timestamp ?? '') || null);
+    for (let i = 1; i < times.length; i++) times[i] ??= times[i - 1];
+    for (let i = times.length - 2; i >= 0; i--) times[i] ??= times[i + 1];
+    return entries.map((entry, i) => ({ entry, order: order++, time: times[i] ?? 0 }));
+  });
+  return timed.sort((a, b) => a.time - b.time || a.order - b.order).map(({ entry }) => entry);
+}
 
 function resultText(block) {
   if (typeof block.content === 'string') return block.content;
@@ -41,10 +57,16 @@ function promptText(content) {
 function editLines(tool, result, ledger) {
   const { name, input } = tool;
   if (Array.isArray(result?.structuredPatch) && result.structuredPatch.length) return patchLines(result.structuredPatch);
-  if (name === 'Edit') return multisetDiff(splitLines(input.old_string), splitLines(input.new_string));
+  const diffEdit = (edit) => {
+    const { removed, added } = multisetDiff(splitLines(edit.old_string), splitLines(edit.new_string));
+    if (!edit.replace_all) return { removed, added };
+    const copies = ledger.copies(input.file_path, splitLines(edit.old_string));
+    return { removed: Array(copies).fill(removed).flat(), added: joinRuns(Array(copies).fill(added)) };
+  };
+  if (name === 'Edit') return diffEdit(input);
   if (name === 'MultiEdit') {
-    const diffs = (input.edits ?? []).map((edit) => multisetDiff(splitLines(edit.old_string), splitLines(edit.new_string)));
-    return { removed: diffs.flatMap((d) => d.removed), added: diffs.flatMap((d) => d.added) };
+    const diffs = (input.edits ?? []).map(diffEdit);
+    return { removed: diffs.flatMap((d) => d.removed), added: joinRuns(diffs.map((d) => d.added)) };
   }
   const next = splitLines(input.content);
   if (typeof result?.originalFile === 'string') return multisetDiff(splitLines(result.originalFile), next);
@@ -81,16 +103,16 @@ export function analyse(entries, pricing) {
     for (const block of results) {
       const tool = tools.get(block.tool_use_id);
       if (!tool) continue;
-      if (block.is_error || (tool.name === 'Bash' && FAILURE_TEXT.test(resultText(block)))) {
-        failures++;
-        continue;
-      }
+      // Only a failing command counts as a failure: a failed Edit or Read, or a rejected call, is not something to fix.
+      const text = resultText(block);
+      if (tool.name === 'Bash' && ((block.is_error && !REJECTED.test(text)) || FAILURE_TEXT.test(text))) failures++;
+      if (block.is_error) continue;
       if (!EDIT_TOOLS.has(tool.name) || !tool.input.file_path) continue;
       const result = results.length === 1 ? entry.toolUseResult : null;
       const { removed, added } = editLines(tool, result, ledger);
       ledger.apply(tool.input.file_path, removed, added, {
         messageId: tool.messageId,
-        turn: messages.get(tool.messageId)?.turn ?? turns.length - 1,
+        turn: messages.get(tool.messageId).turn,
         failures,
         failuresAtTurnStart,
       });
@@ -112,7 +134,7 @@ function summarise(messages, turns, ledger, pricing) {
   // A message's whole cost (input, cache and output) is spread evenly over the lines it wrote.
   const writtenPerMessage = new Map();
   for (const line of ledger.lines) writtenPerMessage.set(line.writtenBy, (writtenPerMessage.get(line.writtenBy) ?? 0) + 1);
-  const lineCost = (line) => (costOf.get(line.writtenBy) ?? 0) / writtenPerMessage.get(line.writtenBy);
+  const lineCost = (line) => costOf.get(line.writtenBy) / writtenPerMessage.get(line.writtenBy);
 
   const rows = turns.map((turn) => ({
     turn: turn.index,
@@ -141,17 +163,18 @@ function summarise(messages, turns, ledger, pricing) {
   const sum = (key) => rows.reduce((total, row) => total + row[key], 0);
   const totalCost = sum('cost');
   const written = sum('written');
+  const rework = sum('rework');
   const unprompted = sum('unprompted');
   const wastedCost = sum('wastedCost');
   return {
     summary: {
       totalCost,
-      codeCost: [...writtenPerMessage.keys()].reduce((total, id) => total + (costOf.get(id) ?? 0), 0),
+      codeCost: [...writtenPerMessage.keys()].reduce((total, id) => total + costOf.get(id), 0),
       messages: messages.size,
       turns: turns.length - 1,
       linesWritten: written,
-      linesSurviving: written - unprompted - sum('rework'),
-      linesRework: sum('rework'),
+      linesSurviving: written - unprompted - rework,
+      linesRework: rework,
       linesUnprompted: unprompted,
       reworkCost: sum('reworkCost'),
       wastedCost,

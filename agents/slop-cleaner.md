@@ -17,7 +17,7 @@ Never widen the scope. If a fix needs a file outside it, list it under remaining
 
 ## 1. Measure
 
-Run `slop-report --latest --json` (or `slop-report <transcript> --json`). If the command is missing, run `node ${CLAUDE_PLUGIN_ROOT}/bin/slop-report.mjs` with the same arguments; if neither exists, use `git diff --name-only` against the base branch and skip the numbers.
+Run `slop-report --latest --json` (or `slop-report <transcript> --json`). If the command is missing, run `node ${CLAUDE_PLUGIN_ROOT}/bin/slop-report` with the same arguments; if neither exists, use `git diff --name-only` against the base branch and skip the numbers.
 
 From the JSON take:
 - `files`: for `session` scope, the files with `surviving > 0`; files with high `churned` are where the session thrashed and deserve a closer look;
