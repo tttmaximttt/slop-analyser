@@ -1,6 +1,6 @@
 {
   "name": "slop-analyser",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Measure wasted spend and code churn in Claude Code sessions, and clean up what survived with a bounded agent",
   "author": { "name": "Maksym Radko" },
   "repository": "https://github.com/tttmaximttt/slop-analyser",

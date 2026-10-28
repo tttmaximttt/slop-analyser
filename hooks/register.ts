@@ -26,7 +26,7 @@ export const register: Register = on => {
       $.ui.status(
         s.linesWritten
           ? `slop ${(s.slopLineRatio * 100).toFixed(1)}% · ${usd(s.wastedCost)} wasted of ${usd(s.totalCost)}`
-          : undefined,
+          : `slop — · ${usd(s.totalCost)} spent, no code written yet`,
       )
     } catch (err) {
       $.ui.log(`${$.plugin.name}: ${String(err)}`, { to: 'debug' })
