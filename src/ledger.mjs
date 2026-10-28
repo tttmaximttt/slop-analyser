@@ -24,7 +24,6 @@ export class Ledger {
       const line = live.get(key)?.pop();
       if (!line) continue;
       line.removedBy = ctx.messageId;
-      line.removedTurn = ctx.turn;
       line.reactive = ctx.failures > Math.max(line.failuresAtWrite, ctx.failuresAtTurnStart);
     }
     for (const text of added) {

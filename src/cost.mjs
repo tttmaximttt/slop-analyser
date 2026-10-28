@@ -5,7 +5,7 @@ export function loadPricing(path = new URL('../pricing.json', import.meta.url)) 
 }
 
 // Transcripts may carry dated ids (claude-sonnet-4-5-20250929); match the longest known prefix.
-export function ratesFor(model, pricing) {
+function ratesFor(model, pricing) {
   if (!model) return null;
   let best = null;
   for (const id of Object.keys(pricing.models)) {
