@@ -8,15 +8,35 @@ Measures how much of a Claude Code session's spend went into code that was later
 
 ## Install
 
-```sh
-git clone https://github.com/tttmaximttt/slop-analyser
-cd slop-analyser
-npm link                                  # puts slop-report on PATH
-mkdir -p ~/.claude/agents
-cp .claude/agents/slop-*.md ~/.claude/agents/
+In Claude Code:
+
+```
+/plugin install slop-analyser --marketplace tttmaximttt/slop-analyser
 ```
 
+On versions before 2.1.275, add the marketplace first:
+
+```
+/plugin marketplace add tttmaximttt/slop-analyser
+/plugin install slop-analyser@slop-analyser
+```
+
+That gives you:
+
+| Component | Use |
+| --- | --- |
+| `/slop-analyser:slop-report` | Prints the report for the current session |
+| `slop-analyser:slop-cleaner` agent | Cleans up the session's code |
+| `slop-analyser:slop-reviewer` agent | Reviews a cleanup without editing |
+| `slop-report` command | On the Bash tool's PATH while the plugin is enabled |
+
 Requires Node 20 or later. No dependencies.
+
+To run the report outside Claude Code too, for example in a terminal or CI, without touching the session:
+
+```sh
+npx github:tttmaximttt/slop-analyser --latest
+```
 
 ## slop-report
 
@@ -49,12 +69,12 @@ What it counts:
 
 ## Agents
 
-Ask Claude Code to use them by name:
+Mention them with `@`, or ask for them by name:
 
 ```
-Use the slop-cleaner agent on session
-Use the slop-cleaner agent on src/orders/service.ts src/orders/mapper.ts
-Use the slop-reviewer agent on the last slop-cleaner pass
+@agent-slop-analyser:slop-cleaner session
+@agent-slop-analyser:slop-cleaner src/orders/service.ts src/orders/mapper.ts
+@agent-slop-analyser:slop-reviewer review the last slop-cleaner pass
 ```
 
 `slop-cleaner` runs `slop-report` first to pick files and smells, locks behaviour with the narrowest tests, then cleans one bucket at a time (dead code, duplication, needless abstraction and boundary fixes, noise, tests), rerunning the lock after each. It ends with four sections: changed files, simplifications, behaviour lock and verification, remaining risks.
@@ -65,4 +85,6 @@ If you also run oh-my-claudecode, these agents do not replace its `ai-slop-clean
 
 ```sh
 npm test
+claude plugin validate .
+claude --plugin-dir .          # try local changes without installing
 ```
