@@ -30,7 +30,7 @@ That gives you:
 | `slop-analyser:slop-reviewer` agent | Reviews a cleanup without editing |
 | `slop-report` command | On the Bash tool's PATH while the plugin is enabled |
 
-Requires Node 20 or later. No dependencies.
+Requires Node 20.10 or later. No dependencies.
 
 To run the report outside Claude Code too, for example in a terminal or CI, without touching the session:
 
