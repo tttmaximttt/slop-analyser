@@ -14,10 +14,11 @@ async function refresh($: EngineInterface, startCwd: string | undefined) {
   const path = `${transcriptDir(home ?? '', cwd)}/${await $.session.id()}.jsonl`
   const { exitCode, stdout } = await $.process.run(['node', `${$.plugin.root}/bin/slop-report`, path, '--json'], { timeoutMs: 10_000 })
   if (exitCode !== 0) return false
-  const { summary: s } = JSON.parse(stdout)
+  const { summary: s, smells } = JSON.parse(stdout)
+  const left = smells.reduce((total: number, smell: { count: number }) => total + smell.count, 0)
   $.ui.status(
     s.linesWritten
-      ? `slop ${(s.slopLineRatio * 100).toFixed(1)}% · ${usd(s.wastedCost)} wasted of ${usd(s.totalCost)}`
+      ? `slop ${(s.slopLineRatio * 100).toFixed(1)}% · ${s.linesUnprompted} lines thrown away, ${usd(s.wastedCost)} of ${usd(s.totalCost)} · ${left} ${left === 1 ? 'smell' : 'smells'} left`
       : idle(s.totalCost),
   )
   return true
