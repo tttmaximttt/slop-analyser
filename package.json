@@ -1,6 +1,6 @@
 {
   "name": "slop-analyser",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Measure wasted spend and code churn in Claude Code session transcripts, and clean it up with a bounded agent",
   "type": "module",
   "bin": {
