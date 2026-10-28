@@ -29,7 +29,7 @@ That gives you:
 | `slop-analyser:slop-cleaner` agent | Cleans up the session's code |
 | `slop-analyser:slop-reviewer` agent | Reviews a cleanup without editing |
 | `slop-report` command | On the Bash tool's PATH while the plugin is enabled |
-| Status line entry | At session start and after each turn, `slop 3.2% · $0.41 wasted of $2.10` for the current session (`slop — · $0.78 spent, no code written yet` until it writes code) |
+| Status line entry | At session start and after each turn, `slop 3.2% · 12 lines thrown away, $0.41 of $2.10 · 5 smells left` for the current session: what was rewritten with no failure, and the smells still in the lines that survived (`slop — · $0.78 spent, no code written yet` until it writes code) |
 
 Requires Node 20.10 or later. No dependencies.
 
