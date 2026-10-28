@@ -190,6 +190,20 @@ test('a copied block counts once however long it is, and a window never spans se
   assert.equal(spread.smells.find((s) => s.id === 'duplicate'), undefined);
 });
 
+test('a block copied within one write counts as duplicated, a single copy does not', () => {
+  const body = 'const p = parse(raw);\nconst v = p.filter(ok);\nconst s = v.sort(byTotal);\nreturn s.map(total);';
+  const smellsOf = (content) =>
+    analyse([prompt('write'), call('m1', 't1', 'Write', { file_path: '/repo/g.js', content }), result('t1')], pricing).smells;
+  const twice = smellsOf(`function a(raw) {\n${body}\n}\nfunction b(raw) {\n${body}\n}`);
+  assert.deepEqual(twice.find((s) => s.id === 'duplicate'), {
+    id: 'duplicate',
+    label: 'duplicated 4-line block',
+    count: 1,
+    examples: ['/repo/g.js: const p = parse(raw);'],
+  });
+  assert.equal(smellsOf(`function a(raw) {\n${body}\n}`).find((s) => s.id === 'duplicate'), undefined);
+});
+
 test('a replace_all Edit with no patch removes every tracked copy', () => {
   const file = '/repo/f.js';
   const { summary } = analyse(

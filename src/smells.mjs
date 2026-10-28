@@ -56,8 +56,9 @@ function contiguousRuns(lines) {
   return runs;
 }
 
-// A block counts as duplicated when the same WINDOW consecutive lines from one run appear in another run.
-// Overlapping duplicated windows form one block, counted once however many copies it has.
+// A block counts as duplicated when the same WINDOW consecutive lines appear twice without overlapping,
+// in another run or further along the same one. Overlapping duplicated windows form one block, counted once
+// however many copies it has.
 function findDuplicateBlocks(lines) {
   const runs = contiguousRuns(lines).map((run) => ({
     file: run[0].file,
@@ -67,22 +68,24 @@ function findDuplicateBlocks(lines) {
   }));
   const seen = new Map();
   runs.forEach(({ file, windows }, r) => {
-    for (const block of windows) {
-      if (!seen.has(block)) seen.set(block, new Map());
-      seen.get(block).set(r, file);
-    }
+    windows.forEach((block, i) => {
+      if (!seen.has(block)) seen.set(block, []);
+      seen.get(block).push({ r, i, file });
+    });
   });
   const blocks = new Map();
-  for (const { windows } of runs) {
+  runs.forEach(({ windows }, r) => {
     let inBlock = false;
-    for (const block of windows) {
-      const where = seen.get(block);
-      const duplicated = where.size > 1;
-      if (duplicated && !inBlock && !blocks.has(block)) blocks.set(block, where);
+    windows.forEach((block, i) => {
+      const copies = seen.get(block);
+      const duplicated = copies.some((copy) => copy.r !== r || Math.abs(copy.i - i) >= WINDOW);
+      if (duplicated && !inBlock && !blocks.has(block)) blocks.set(block, copies);
       inBlock = duplicated;
-    }
-  }
+    });
+  });
   const hit = { id: 'duplicate', label: `duplicated ${WINDOW}-line block`, count: blocks.size, examples: [] };
-  for (const [block, where] of [...blocks].slice(0, 3)) hit.examples.push(`${[...new Set(where.values())].join(', ')}: ${block.split('\n')[0]}`);
+  for (const [block, copies] of [...blocks].slice(0, 3)) {
+    hit.examples.push(`${[...new Set(copies.map((copy) => copy.file))].join(', ')}: ${block.split('\n')[0]}`);
+  }
   return hit;
 }
