@@ -4,7 +4,8 @@ import { Ledger, multisetDiff, patchLines } from './ledger.mjs';
 import { findSmells } from './smells.mjs';
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write']);
-const FAILURE_TEXT = /\b\d+ (failing|failed)\b|\bFAIL\b|error TS\d+|Traceback \(most recent call last\)/;
+// The node:test summary lines catch failures whose exit code was lost in a pipe (`node --test | tail`).
+const FAILURE_TEXT = /\b\d+ (failing|failed)\b|\bFAIL\b|error TS\d+|Traceback \(most recent call last\)|^(# |ℹ )fail [1-9]\d*$/m;
 
 export function readTranscript(path) {
   const entries = [];
@@ -90,7 +91,7 @@ export function analyse(entries, pricing) {
       const { removed, added } = editLines(tool, result, ledger);
       ledger.apply(tool.input.file_path, removed, added, {
         messageId: tool.messageId,
-        turn: messages.get(tool.messageId)?.turn ?? turns.length - 1,
+        turn: messages.get(tool.messageId).turn,
         failures,
         failuresAtTurnStart,
       });
@@ -112,7 +113,7 @@ function summarise(messages, turns, ledger, pricing) {
   // A message's whole cost (input, cache and output) is spread evenly over the lines it wrote.
   const writtenPerMessage = new Map();
   for (const line of ledger.lines) writtenPerMessage.set(line.writtenBy, (writtenPerMessage.get(line.writtenBy) ?? 0) + 1);
-  const lineCost = (line) => (costOf.get(line.writtenBy) ?? 0) / writtenPerMessage.get(line.writtenBy);
+  const lineCost = (line) => costOf.get(line.writtenBy) / writtenPerMessage.get(line.writtenBy);
 
   const rows = turns.map((turn) => ({
     turn: turn.index,
@@ -147,7 +148,7 @@ function summarise(messages, turns, ledger, pricing) {
   return {
     summary: {
       totalCost,
-      codeCost: [...writtenPerMessage.keys()].reduce((total, id) => total + (costOf.get(id) ?? 0), 0),
+      codeCost: [...writtenPerMessage.keys()].reduce((total, id) => total + costOf.get(id), 0),
       messages: messages.size,
       turns: turns.length - 1,
       linesWritten: written,
