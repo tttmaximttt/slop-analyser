@@ -45,6 +45,7 @@ npx github:tttmaximttt/slop-analyser --latest
 ```sh
 slop-report --latest                      # newest session for the current directory
 slop-report --latest --project ~/code/api # newest session for another project
+slop-report --session <id>                # a specific session for the current directory
 slop-report path/to/session.jsonl --json  # full report as JSON
 ```
 
