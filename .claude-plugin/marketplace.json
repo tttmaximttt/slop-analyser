@@ -1,0 +1,12 @@
+{
+  "name": "slop-analyser",
+  "description": "slop-report, slop-cleaner and slop-reviewer for Claude Code",
+  "owner": { "name": "Maksym Radko" },
+  "plugins": [
+    {
+      "name": "slop-analyser",
+      "source": "./",
+      "description": "Measure wasted spend and code churn in Claude Code sessions, and clean up what survived with a bounded agent"
+    }
+  ]
+}
