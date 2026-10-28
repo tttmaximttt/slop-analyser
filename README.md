@@ -26,6 +26,7 @@ That gives you:
 | Component | Use |
 | --- | --- |
 | `/slop-analyser:slop-report` | Prints the report for the current session |
+| `/slop-analyser:update` | Updates the plugin to the latest version; restart Claude Code to apply it |
 | `slop-analyser:slop-cleaner` agent | Cleans up the session's code |
 | `slop-analyser:slop-reviewer` agent | Reviews a cleanup without editing |
 | `slop-report` command | On the Bash tool's PATH while the plugin is enabled |
