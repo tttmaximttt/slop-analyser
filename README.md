@@ -92,10 +92,11 @@ Mention them with `@`, or ask for them by name:
 ```
 @agent-slop-analyser:slop-cleaner session
 @agent-slop-analyser:slop-cleaner src/orders/service.ts src/orders/mapper.ts
+@agent-slop-analyser:slop-cleaner session approved: src/auth/session.ts
 @agent-slop-analyser:slop-reviewer review the last slop-cleaner pass
 ```
 
-`slop-cleaner` runs `slop-report` first to pick files and smells, locks behaviour with the narrowest tests, then cleans one bucket at a time (dead code, duplication, needless abstraction and boundary fixes, noise, tests), rerunning the lock after each. It ends with four sections: changed files, simplifications, behaviour lock and verification, remaining risks.
+`slop-cleaner` runs `slop-report` first to pick files and smells, locks behaviour with the narrowest tests, then cleans one bucket at a time (dead code, duplication, needless abstraction and boundary fixes, noise, tests), rerunning the lock after each. Each pass is judged against the failures and errors that were already there, test by test and error by error, so an unrelated failing test does not block it and an existing lint error cannot hide a new one. It does not edit sensitive code (authentication, payments, migrations, external API contracts, security) unless you name the file after `approved:`; it skips those changes and lists them for you to decide. It ends with five sections: changed files, simplifications, behaviour lock and verification, needs approval, remaining risks.
 
 If you also run oh-my-claudecode, these agents do not replace its `ai-slop-cleaner` skill and do not collide with it: OMC blocks the `ai-slop-cleaner` subagent type, and these use different names. Avoid the words "deslop" and "anti-slop" in a prompt that should reach these agents, since OMC's keyword hook routes those to its own skill.
 
