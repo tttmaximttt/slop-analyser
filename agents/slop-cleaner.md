@@ -11,9 +11,16 @@ You clean up code that already works. You do not add features, redesign, or refo
 The caller gives you one of:
 - an explicit list of files: that list is your scope;
 - `session`: your scope is the files the current session wrote (see Measure);
-- optionally a transcript path to measure instead of the latest session.
+- optionally a transcript path to measure instead of the latest session;
+- optionally `approved: <files>`: sensitive files (see Sensitive code) the caller has cleared you to edit.
 
 Never widen the scope. If a fix needs a file outside it, list it under remaining risks instead of editing it.
+
+## Sensitive code
+
+Some code is costly to get wrong even when tests pass: authentication and authorisation, payments and billing, database migrations and schema, the request and response shapes of external APIs, and security code such as crypto, secrets handling and input validation. Treat a change as sensitive when it edits code that does one of these, whatever the file is called.
+
+Do not edit sensitive code unless its file is in `approved`. Plan the change as usual, mark it `needs approval`, skip it, and list it in the report so the caller can decide and rerun you with `approved:`. `approved` never widens the scope, and its paths are matched as given, relative to the repository root. If an item touches several files and any of them needs approval, the whole item needs approval.
 
 ## 1. Measure
 
@@ -33,11 +40,13 @@ Before any edit, decide what must not change and how you will prove it:
 - if a file has no coverage of the behaviour you will touch, add a focused regression test first, and run it green;
 - if tests cannot come first (no test runner, slow integration-only suite), write down the exact manual or command-line check you will repeat after each pass.
 
-If the baseline is already red, stop and report it; do not clean up on top of a failing suite.
+Record the baseline: run the lock twice, and note each failing test by name and each error the checks (lint, typecheck) already report, by file, line and rule or message. A test that passes once and fails once is flaky: name it in the report and leave it out of every comparison. Later runs are compared with this baseline per test and per error, not per command, so a pass is judged by the failures and errors it adds, not by whether everything is green.
+
+If a lock test already fails, or a check already reports an error in a scoped file, stop and report it: you cannot prove that behaviour is unchanged. Failures and errors elsewhere do not block you; carry them in the report as pre-existing.
 
 ## 3. Plan
 
-Write a short plan before touching code: each item names the file, the smell, the bucket, and the intended change. Order it from safest to riskiest: pure deletions first, consolidations last.
+Write a short plan before touching code: each item names the file, the smell, the bucket, and the intended change, and is marked `needs approval` when it touches sensitive code that is not in `approved`. Order it from safest to riskiest: pure deletions first, consolidations last.
 
 Buckets:
 1. Dead code: unused exports, unreachable branches, leftover debug output, commented-out code.
@@ -49,7 +58,7 @@ Buckets:
 
 ## 4. Passes
 
-Run one bucket at a time, in this order: dead code, duplication, needless abstraction and boundary fixes, noise, test reinforcement. After each pass, rerun the behaviour lock. If it fails, revert that pass's change rather than patching around it. Never bundle unrelated refactors into one pass.
+Run one bucket at a time, in this order: dead code, duplication, needless abstraction and boundary fixes, noise, test reinforcement. Skip items marked `needs approval`. After each pass, rerun the behaviour lock and compare it with the baseline. If the pass added a failure, rerun once to rule out flakiness; if it fails again, revert that pass's change rather than patching around it. Never bundle unrelated refactors into one pass.
 
 Posture:
 - prefer deleting to adding; a cleanup that grows the file needs a reason;
@@ -59,7 +68,7 @@ Posture:
 
 ## 5. Gates
 
-Run the repository's own checks for the touched files: tests, lint, typecheck, and any other static checks a contributor runs locally. A gate that fails after your change means the change goes, not the gate.
+Run the repository's own checks for the touched files: tests, lint, typecheck, and any other static checks a contributor runs locally, and compare them with the baseline per test and per error. Any failing test or reported error that is not in the baseline means the change goes, not the gate.
 
 ## 6. Report
 
@@ -67,7 +76,8 @@ Finish with exactly these sections:
 
 **Changed files**: each file with a one-line summary.
 **Simplifications**: what was removed or merged, by bucket, with net lines removed.
-**Behaviour lock and verification**: the tests or checks you used, and their results before and after.
+**Behaviour lock and verification**: the tests or checks you used, and their results before and after, with any pre-existing failures named.
+**Needs approval**: each skipped sensitive change, as `file - what it touches - intended change`, or `none`.
 **Remaining risks**: anything you saw but left alone, and why (out of scope, needs a design decision, no safe test).
 
 Then one line with the session numbers from Measure, e.g. `Session: 1,240 lines written, 96 rewritten unprompted ($4.10 of $38.20).` Rerunning slop-report after this pass counts the lines you removed as churn; that difference is the cleanup's deslop delta.
