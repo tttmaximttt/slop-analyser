@@ -20,18 +20,19 @@ It runs locally, reads `~/.claude/projects/<project>/<session>.jsonl` and makes 
 
 ## Real results
 
-Measured on 2026-11-03 over the author's own Claude Code history: 29 sessions in 8 projects (14 of them wrote code), 2026-10-06 to 2026-11-03, one `slop-report --json` run per session, summed.
+Measured on 2026-11-03 with slop-report 0.3.7 over the author's own Claude Code history: 29 sessions in 8 projects (14 of them wrote code), 2026-10-06 to 2026-11-03, one `slop-report --json` run per session, summed.
 
 | Measure | Value |
 | --- | --- |
-| Total spend | $852.72 |
-| Spend on messages that wrote code | $21.18 |
-| Lines written / surviving | 15,050 / 14,777 |
+| Total spend | $864.04 |
+| Spend on messages that wrote code | $21.40 |
+| Lines written / surviving | 15,078 / 14,805 |
 | Rewritten after a failure (rework) | 85 lines (0.6%) |
 | Rewritten with no failure (slop) | 188 lines (1.2%), $1.23 wasted |
-| Top smells in surviving code | comment added to source 855, duplicated 4-line block 35, debug output 17, `any` 8 |
+| Top smells in surviving code | duplicated 4-line block 35, debug output 17, `any` 8, lint/type suppression 2, TODO 2 |
+| Comments added to source (informational) | 861 |
 
-One person's sessions, and edits made through Bash are not counted, so churn here is a lower bound; see [Limits](#limits).
+Most spend goes to messages that read, plan and re-read cached context: only $27.03 was in sessions that wrote no code. Wasted cost counts only the message that wrote a discarded line, so it is a floor. One person's sessions, and edits made through Bash are not counted, so churn is a lower bound too; see [Limits](#limits).
 
 ## What's in it
 
@@ -106,7 +107,7 @@ What it counts:
 | Rework | A line the session wrote, then removed after a tool failure (a failing command or test) in the same prompt's turn. This is normal iteration. |
 | Slop | A line the session wrote, then removed with no failure prompting it. |
 | Wasted cost | Each response's full cost is spread evenly over the lines it wrote; the share belonging to slop lines is wasted. |
-| Smells | On surviving lines in code files: comments added to source, `any`, lint and type suppressions, debug output, TODOs, swallowed errors, duplicated 4-line blocks. |
+| Smells | On surviving lines in code files: `any`, lint and type suppressions, debug output, TODOs, swallowed errors, duplicated 4-line blocks. Comments added to source are listed separately as informational and left out of the status line's count. |
 
 ### Limits
 
