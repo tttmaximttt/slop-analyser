@@ -6,6 +6,8 @@ Reads Claude Code transcripts to report session cost, code churn, and the spend 
 [![CI](https://github.com/tttmaximttt/slop-analyser/actions/workflows/ci.yml/badge.svg)](https://github.com/tttmaximttt/slop-analyser/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/tttmaximttt/slop-analyser)](LICENSE)
 
+![slop-report on a real session of this repo: 19.3% of written lines rewritten with no failure, $0.25 of $8.17](docs/demo.gif)
+
 ## Quickstart
 
 In a project you have used Claude Code in:

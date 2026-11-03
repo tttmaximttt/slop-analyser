@@ -7,7 +7,7 @@ Output docs/demo.gif
 Set Shell "bash"
 Set Theme "Catppuccin Mocha"
 Set FontSize 16
-Set Width 1280
+Set Width 1440
 Set Height 900
 Set Padding 24
 Set TypingSpeed 60ms
@@ -24,4 +24,4 @@ Show
 Type "slop-report session.jsonl --top 3"
 Sleep 500ms
 Enter
-Sleep 12s
+Sleep 20s
