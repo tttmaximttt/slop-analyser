@@ -8,6 +8,9 @@ const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write']);
 // FAIL only counts at the start of a line, where jest, vitest and go print it, so grep output that mentions it does not.
 const FAILURE_TEXT = /\b[1-9]\d* (failing|failed)\b|^\s*(--- )?FAIL\b|error TS\d+|Traceback \(most recent call last\)|^(# |ℹ )fail [1-9]\d*$/m;
 const REJECTED = /^The user doesn't want to proceed with this tool use/;
+// User entries nobody typed to the model: background-task notifications, output of local slash commands and of
+// `!` shell commands, and interrupt markers. Transcripts without origin.kind are recognised by these tags.
+const NOT_TYPED = /^\s*(<task-notification>|<local-command-std(out|err)>|<bash-(input|stdout|stderr)>|\[Request interrupted by user)/;
 
 export function readTranscript(path) {
   const entries = [];
@@ -42,11 +45,15 @@ function resultText(block) {
   return (block.content ?? []).map((part) => part.text ?? '').join('\n');
 }
 
+// Only what the user typed starts a turn; a notification or command output arriving mid-turn must not reset
+// the failure count that decides rework.
 function isPrompt(entry) {
-  if (entry.isMeta || entry.isSidechain) return false;
+  if (entry.isMeta || entry.isSidechain || entry.isCompactSummary) return false;
   const content = entry.message?.content;
-  if (typeof content === 'string') return true;
-  return Array.isArray(content) && !content.some((block) => block.type === 'tool_result');
+  if (Array.isArray(content) && content.some((block) => block.type === 'tool_result')) return false;
+  if (typeof entry.origin?.kind === 'string') return entry.origin.kind === 'human';
+  if (typeof content === 'string') return !NOT_TYPED.test(content);
+  return Array.isArray(content) && !NOT_TYPED.test(content.find((block) => block.type === 'text')?.text ?? '');
 }
 
 function promptText(content) {

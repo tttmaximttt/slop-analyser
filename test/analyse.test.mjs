@@ -226,3 +226,48 @@ test('a line with no timestamp stays next to its neighbours when transcripts are
   const sub = [at(null, 's0'), at('2026-01-01T00:00:03Z', 's1')];
   assert.deepEqual(mergeByTime([main, sub]).map((e) => e.id), ['p1', 'a1', 's0', 's1', 'p2']);
 });
+
+const fixAfterFailure = (between) =>
+  analyse(
+    [
+      prompt('fix it'),
+      call('m1', 't1', 'Write', { file_path: '/repo/n.js', content: 'let n = 1;' }),
+      result('t1'),
+      call('m2', 't2', 'Bash', { command: 'npm test' }),
+      result('t2', {}, true),
+      between,
+      call('m3', 't3', 'Edit', { file_path: '/repo/n.js', old_string: 'let n = 1;', new_string: 'let n = 2;' }),
+      result('t3'),
+    ],
+    pricing,
+  ).summary;
+
+test('a notification, command output, interrupt or compaction mid-turn does not start a turn', () => {
+  const user = (content, extra = {}) => ({ type: 'user', message: { role: 'user', content }, ...extra });
+  const notTyped = {
+    'task notification': user('<task-notification>done</task-notification>', { origin: { kind: 'task-notification' } }),
+    'task notification without origin': user('<task-notification>done</task-notification>'),
+    'local command output': user('<local-command-stdout>Set model</local-command-stdout>'),
+    'shell command': user('<bash-input>ls</bash-input>'),
+    interrupt: user([{ type: 'text', text: '[Request interrupted by user]' }]),
+    'compaction summary': user('This session is being continued from a previous conversation.', { isCompactSummary: true }),
+  };
+  for (const [name, entry] of Object.entries(notTyped)) {
+    const summary = fixAfterFailure(entry);
+    assert.equal(summary.turns, 1, name);
+    assert.equal(summary.linesRework, 1, name);
+  }
+});
+
+test('a typed prompt or slash command starts a turn, judged by origin.kind when present', () => {
+  const typed = {
+    'typed prompt': { type: 'user', message: { role: 'user', content: 'now rename it' }, origin: { kind: 'human' } },
+    'slash command': prompt('<command-message>review</command-message>\n<command-name>/review</command-name>'),
+    'prompt with a non-kind origin': { type: 'user', message: { role: 'user', content: 'go on' }, origin: { remote: 'o/r' } },
+  };
+  for (const [name, entry] of Object.entries(typed)) {
+    const summary = fixAfterFailure(entry);
+    assert.equal(summary.turns, 2, name);
+    assert.equal(summary.linesUnprompted, 1, name);
+  }
+});
