@@ -1,12 +1,43 @@
 # slop-analyser
 
-[![npm](https://img.shields.io/npm/v/slop-analyser)](https://www.npmjs.com/package/slop-analyser)
+Reads Claude Code transcripts to report session cost, code churn, and the spend behind lines thrown away.
 
-Measures how much of a Claude Code session's spend went into code that was later thrown away, and gives you two agents to clean up what survived.
+[![npm](https://img.shields.io/npm/v/slop-analyser)](https://www.npmjs.com/package/slop-analyser)
+[![CI](https://github.com/tttmaximttt/slop-analyser/actions/workflows/ci.yml/badge.svg)](https://github.com/tttmaximttt/slop-analyser/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/tttmaximttt/slop-analyser)](LICENSE)
+
+![slop-report on a real session of this repo: 19.3% of written lines rewritten with no failure, $0.25 of $8.17](docs/demo.gif)
+
+## Quickstart
+
+In a project you have used Claude Code in:
+
+```sh
+npx -p slop-analyser slop-report --latest
+```
+
+It runs locally, reads `~/.claude/projects/<project>/<session>.jsonl` and makes no API calls. To get it as a Claude Code plugin with a status line and cleanup agents, see [Install](#install).
+
+## Real results
+
+Measured on 2026-11-03 over the author's own Claude Code history: 29 sessions in 8 projects (14 of them wrote code), 2026-10-06 to 2026-11-03, one `slop-report --json` run per session, summed.
+
+| Measure | Value |
+| --- | --- |
+| Total spend | $852.72 |
+| Spend on messages that wrote code | $21.18 |
+| Lines written / surviving | 15,050 / 14,777 |
+| Rewritten after a failure (rework) | 85 lines (0.6%) |
+| Rewritten with no failure (slop) | 188 lines (1.2%), $1.23 wasted |
+| Top smells in surviving code | comment added to source 855, duplicated 4-line block 35, debug output 17, `any` 8 |
+
+One person's sessions, and edits made through Bash are not counted, so churn here is a lower bound; see [Limits](#limits).
+
+## What's in it
 
 ![The slop-analyser status line: slop 4.7% · 3 lines thrown away, $0.01 of $6.89 · 14 smells left](https://raw.githubusercontent.com/tttmaximttt/slop-analyser/main/docs/status-line.png)
 
-- `slop-report` reads a session transcript (`~/.claude/projects/<project>/<session>.jsonl`) and reports cost, lines written, lines rewritten, and static smells in what remains. It runs locally and makes no API calls, so it costs no tokens.
+- `slop-report` reports a session's cost, lines written, lines rewritten, and static smells in what remains. It costs no tokens.
 - `slop-cleaner` is a Claude Code subagent based on the oh-my-claudecode `ai-slop-cleaner` workflow: measure, lock behaviour, plan, one smell per pass, gates, fixed report.
 - `slop-reviewer` is a read-only subagent that reviews a cleaner pass and returns a verdict, keeping writer and reviewer separate.
 
@@ -106,4 +137,5 @@ If you also run oh-my-claudecode, these agents do not replace its `ai-slop-clean
 npm test
 claude plugin validate .
 claude --plugin-dir .          # try local changes without installing
+vhs docs/demo.tape             # regenerate docs/demo.gif (needs vhs and a session of this repo)
 ```
