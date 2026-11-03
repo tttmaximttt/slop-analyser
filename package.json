@@ -14,7 +14,8 @@
     "hooks/",
     "skills/",
     "src/",
-    "pricing.json"
+    "pricing.json",
+    "!**/AGENTS.md"
   ],
   "scripts": {
     "test": "node --test"
