@@ -45,12 +45,15 @@ export function formatReport(report, { top = 10 } = {}) {
     out.push(table(['File', 'Written', 'Surviving', 'Churned'], churned.map((f) => [f.file, f.written, f.surviving, f.churned])));
   }
 
-  if (report.smells.length) {
-    out.push('\nSmells in surviving lines');
-    for (const smell of report.smells) {
+  const section = (heading, smells) => {
+    if (!smells.length) return;
+    out.push(`\n${heading}`);
+    for (const smell of smells) {
       out.push(`  ${smell.label}: ${smell.count}`);
       for (const example of smell.examples) out.push(`    ${example}`);
     }
-  }
+  };
+  section('Smells in surviving lines', report.smells.filter((smell) => !smell.informational));
+  section('Informational (not counted as smells)', report.smells.filter((smell) => smell.informational));
   return out.join('\n');
 }

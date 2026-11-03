@@ -4,10 +4,12 @@ const CODE = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.go'
 const TYPED = new Set(['.ts', '.tsx']);
 const HASH_COMMENTS = new Set(['.py', '.rb', '.sh']);
 
+// An informational rule is reported but not counted as a smell: it flags every new comment, good or bad.
 const RULES = [
   {
     id: 'comment',
     label: 'comment added to source',
+    informational: true,
     test: (text, ext) => (HASH_COMMENTS.has(ext) ? /(^|\s)#(?!!)/ : /(^|\s)\/\/(\s|$)|^\s*(\/\*|\*(?![*/]))/).test(text),
   },
   { id: 'any', label: 'any type', test: (text, ext) => TYPED.has(ext) && /\bas any\b|:\s*any\b|<any>/.test(text) },
@@ -22,7 +24,9 @@ const WINDOW = 4;
 export function findSmells(lines) {
   const code = lines.filter((line) => CODE.has(extname(line.file)));
   const surviving = code.filter((line) => !line.removedBy);
-  const hits = new Map(RULES.map((rule) => [rule.id, { id: rule.id, label: rule.label, count: 0, examples: [] }]));
+  const hits = new Map(
+    RULES.map((rule) => [rule.id, { id: rule.id, label: rule.label, informational: Boolean(rule.informational), count: 0, examples: [] }]),
+  );
   for (const line of surviving) {
     const ext = extname(line.file);
     for (const rule of RULES) {
@@ -83,7 +87,7 @@ function findDuplicateBlocks(lines) {
       inBlock = duplicated;
     });
   });
-  const hit = { id: 'duplicate', label: `duplicated ${WINDOW}-line block`, count: blocks.size, examples: [] };
+  const hit = { id: 'duplicate', label: `duplicated ${WINDOW}-line block`, informational: false, count: blocks.size, examples: [] };
   for (const [block, copies] of [...blocks].slice(0, 3)) {
     hit.examples.push(`${[...new Set(copies.map((copy) => copy.file))].join(', ')}: ${block.split('\n')[0]}`);
   }

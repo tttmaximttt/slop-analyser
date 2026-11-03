@@ -16,7 +16,9 @@ async function refresh($: EngineInterface, startCwd: string | undefined) {
     return false
   }
   const { summary: s, smells } = JSON.parse(stdout)
-  const left = smells.reduce((total: number, smell: { count: number }) => total + smell.count, 0)
+  const left = smells
+    .filter((smell: { informational?: boolean }) => !smell.informational)
+    .reduce((total: number, smell: { count: number }) => total + smell.count, 0)
   $.ui.status(
     s.linesWritten
       ? `slop ${(s.slopLineRatio * 100).toFixed(1)}% · ${s.linesUnprompted} lines thrown away, ${usd(s.wastedCost)} of ${usd(s.totalCost)} · ${left} ${left === 1 ? 'smell' : 'smells'} left`

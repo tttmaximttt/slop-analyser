@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { analyse, mergeByTime } from '../src/analyse.mjs';
 import { loadPricing, messageCost } from '../src/cost.mjs';
+import { formatReport } from '../src/format.mjs';
 
 const pricing = loadPricing();
 const usage = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 1_000_000 };
@@ -92,7 +93,7 @@ test('diffs MultiEdit inputs and flags a block repeated across writes', () => {
   assert.equal(summary.linesWritten, 9);
   assert.deepEqual(
     smells.find((s) => s.id === 'duplicate'),
-    { id: 'duplicate', label: 'duplicated 4-line block', count: 1, examples: ['/repo/a.js, /repo/b.js: const x = load();'] },
+    { id: 'duplicate', label: 'duplicated 4-line block', informational: false, count: 1, examples: ['/repo/a.js, /repo/b.js: const x = load();'] },
   );
 });
 
@@ -198,6 +199,7 @@ test('a block copied within one write counts as duplicated, a single copy does n
   assert.deepEqual(twice.find((s) => s.id === 'duplicate'), {
     id: 'duplicate',
     label: 'duplicated 4-line block',
+    informational: false,
     count: 1,
     examples: ['/repo/g.js: const p = parse(raw);'],
   });
@@ -270,4 +272,22 @@ test('a typed prompt or slash command starts a turn, judged by origin.kind when 
     assert.equal(summary.turns, 2, name);
     assert.equal(summary.linesUnprompted, 1, name);
   }
+});
+
+test('added comments are reported as informational, apart from the smells', () => {
+  const report = analyse(
+    [
+      prompt('add it'),
+      call('m1', 't1', 'Write', { file_path: '/repo/c.ts', content: '// add one\nlet c = x as any;' }),
+      result('t1'),
+    ],
+    pricing,
+  );
+  assert.deepEqual(
+    report.smells.map((s) => [s.id, s.informational]),
+    [['comment', true], ['any', false]],
+  );
+  const text = formatReport(report);
+  assert.match(text, /Smells in surviving lines\n  any type: 1\n/);
+  assert.match(text, /Informational \(not counted as smells\)\n  comment added to source: 1\n/);
 });
